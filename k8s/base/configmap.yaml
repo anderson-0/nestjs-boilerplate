@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kodey-boilerplate-config
+  namespace: kodey-boilerplate
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  HOST: "0.0.0.0"
+  # CORS Configuration
+  CORS_ORIGIN: "*"
+  # Cache Configuration
+  CACHE_TTL: "300"
+  CACHE_MAX: "1000"
+  # Throttling Configuration
+  THROTTLE_TTL: "60000"
+  THROTTLE_LIMIT: "1000"
+  # Feature Flags
+  FEATURE_COMPRESSION: "true"
+  FEATURE_DOCUMENTATION: "true"
+  FEATURE_CACHING: "true"
+  FEATURE_THROTTLING: "true"
+  # Database Configuration (non-sensitive)
+  DATABASE_PROVIDER: "prisma-postgresql"
+  DATABASE_POOL_SIZE: "10"
+  DATABASE_TIMEOUT: "30000"

@@ -1,0 +1,273 @@
+name: Deploy Boilerplate to EKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'boilerplate/**'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'boilerplate/**'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+env:
+  AWS_REGION: us-west-2
+  EKS_CLUSTER_NAME: kodey-boilerplate-eks
+  ECR_REPOSITORY: kodey-boilerplate
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: kodey_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+
+    - name: Install dependencies
+      working-directory: ./boilerplate
+      run: pnpm install --frozen-lockfile
+
+    - name: Generate Prisma client
+      working-directory: ./boilerplate
+      run: pnpm prisma generate
+
+    - name: Run database migrations
+      working-directory: ./boilerplate
+      run: pnpm prisma migrate deploy
+      env:
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/kodey_test
+
+    - name: Run unit tests
+      working-directory: ./boilerplate
+      run: pnpm test:cov
+      env:
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/kodey_test
+        REDIS_URL: redis://localhost:6379
+
+    - name: Run e2e tests
+      working-directory: ./boilerplate
+      run: pnpm test:e2e
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/kodey_test
+        REDIS_URL: redis://localhost:6379
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run security audit
+      run: npm audit --audit-level moderate
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  build:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.build-image.outputs.image-tag }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build a docker container and push it to ECR
+        cd boilerplate
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Scan image with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.build-image.outputs.image-tag }}'
+        format: 'sarif'
+        output: 'trivy-image-results.sarif'
+
+    - name: Upload Trivy image scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-image-results.sarif'
+
+  deploy-staging:
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Update kubeconfig
+      run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+    - name: Deploy to staging
+      run: |
+        # Update image tag in kustomization
+        cd boilerplate/k8s/overlays/staging
+        kustomize edit set image kodey-boilerplate=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image-tag }}
+
+        # Apply manifests
+        kubectl apply -k .
+
+        # Wait for rollout
+        kubectl rollout status deployment/kodey-boilerplate -n kodey-boilerplate-staging --timeout=600s
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Setup kustomize
+      uses: imranismail/setup-kustomize@v1
+
+    - name: Update kubeconfig
+      run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+    - name: Run database migrations
+      run: |
+        # Create a job to run migrations
+        kubectl create job --from=cronjob/migrate-db migrate-db-$(date +%s) -n kodey-boilerplate || true
+        kubectl wait --for=condition=complete --timeout=300s job -l job-name=migrate-db -n kodey-boilerplate
+
+    - name: Deploy to production
+      run: |
+        # Update image tag in kustomization
+        cd boilerplate/k8s/overlays/production
+        kustomize edit set image kodey-boilerplate=${{ needs.build.outputs.image-tag }}
+
+        # Apply manifests
+        kubectl apply -k .
+
+        # Wait for rollout
+        kubectl rollout status deployment/kodey-boilerplate -n kodey-boilerplate --timeout=600s
+
+    - name: Verify deployment
+      run: |
+        # Check if all pods are ready
+        kubectl get pods -n kodey-boilerplate
+
+        # Check service endpoints
+        kubectl get endpoints -n kodey-boilerplate
+
+        # Run basic health check
+        kubectl exec -n kodey-boilerplate deployment/kodey-boilerplate -- curl -f http://localhost:3000/api/health
+
+    - name: Slack notification
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
