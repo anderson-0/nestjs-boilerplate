@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kodey-boilerplate
-  labels:
-    app: kodey-boilerplate
-    environment: base

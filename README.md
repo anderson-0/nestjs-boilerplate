@@ -38,7 +38,7 @@ A production-ready NestJS boilerplate application featuring a comprehensive feat
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm
+- Bun 1.0+ (faster than npm/pnpm)
 - Docker and Docker Compose
 - Git
 
@@ -52,7 +52,7 @@ A production-ready NestJS boilerplate application featuring a comprehensive feat
 
 2. **Install dependencies**
    ```bash
-   npm install
+   bun install
    ```
 
 3. **Set up environment**
@@ -73,20 +73,20 @@ A production-ready NestJS boilerplate application featuring a comprehensive feat
 5. **Run database migrations**
    ```bash
    # For Prisma (default)
-   npm run prisma:migrate
+   bun run prisma:migrate
 
    # For Drizzle
-   npm run drizzle:migrate
+   bun run drizzle:migrate
    ```
 
 6. **Start the application**
    ```bash
    # Development mode
-   npm run start:dev
+   bun run start:dev
 
    # Production mode
-   npm run build
-   npm run start:prod
+   bun run build
+   bun run start:prod
    ```
 
 The API will be available at `http://localhost:3000/api`
@@ -170,8 +170,8 @@ DATABASE_PROVIDER=prisma-postgresql
 DATABASE_URL=postgresql://user:password@localhost:5432/db
 
 # Run migrations
-npm run prisma:migrate
-npm run prisma:generate
+bun run prisma:migrate
+bun run prisma:generate
 ```
 
 #### 2. Drizzle + PostgreSQL
@@ -181,8 +181,8 @@ DATABASE_PROVIDER=drizzle-postgresql
 DATABASE_URL=postgresql://user:password@localhost:5432/db
 
 # Run migrations
-npm run drizzle:generate
-npm run drizzle:migrate
+bun run drizzle:generate
+bun run drizzle:migrate
 ```
 
 #### 3. Mongoose + MongoDB
@@ -211,17 +211,17 @@ The project maintains **100% test coverage** with comprehensive test suites:
 
 ```bash
 # Run all tests
-npm test
+bun test
 
 # Run tests with coverage
-npm run test:cov
+bun run test:cov
 
 # Run E2E tests
-npm run test:e2e
+bun run test:e2e
 
 # Run specific test files
-npm test -- todos.service.spec.ts
-npm test -- --testPathPatterns="repository\.spec\.ts"
+bun test -- todos.service.spec.ts
+bun test -- --testPathPatterns="repository\.spec\.ts"
 ```
 
 ### Test Structure
@@ -242,13 +242,13 @@ test/
 ### Test Commands
 ```bash
 # Development testing
-npm run test:watch
+bun run test:watch
 
 # Debug tests
-npm run test:debug
+bun run test:debug
 
 # Test specific database provider
-DATABASE_PROVIDER=drizzle-postgresql npm test
+DATABASE_PROVIDER=drizzle-postgresql bun test
 ```
 
 ## 📚 API Documentation
@@ -339,20 +339,20 @@ docker run -p 3000:3000 \
 ### Development Workflow
 ```bash
 # Start development server with hot reload
-npm run start:dev
+bun run start:dev
 
 # Run linting
-npm run lint
-npm run lint:fix
+bun run lint
+bun run lint:fix
 
 # Format code
-npm run format
+bun run format
 
 # Type checking
-npm run typecheck
+bun run typecheck
 
 # Build for production
-npm run build
+bun run build
 ```
 
 ### Project Structure
@@ -444,10 +444,10 @@ Feature flags allow switching providers without code changes - only environment 
 ### Environment-Specific Deployment
 ```bash
 # Staging
-NODE_ENV=staging npm run start:prod
+NODE_ENV=staging bun run start:prod
 
 # Production
-NODE_ENV=production npm run start:prod
+NODE_ENV=production bun run start:prod
 ```
 
 ## 🤝 Contributing
@@ -456,7 +456,7 @@ NODE_ENV=production npm run start:prod
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make changes and add tests
-4. Ensure all tests pass: `npm test`
+4. Ensure all tests pass: `bun test`
 5. Commit changes: `git commit -m 'Add amazing feature'`
 6. Push to branch: `git push origin feature/amazing-feature`
 7. Open a Pull Request
@@ -474,6 +474,42 @@ NODE_ENV=production npm run start:prod
 - Controllers must have integration tests
 - New database operations need repository tests
 - API changes require E2E test updates
+
+## 🚀 Deployment
+
+This boilerplate is **production-ready** with standardized infrastructure configurations:
+
+### ⚡ Quick Deploy
+```bash
+# Local development with Docker
+make dev
+
+# Production deployment (requires AWS setup)
+# See deployment guides in parent directory
+```
+
+### 📚 Deployment Options
+
+| Method | Command | Documentation |
+|--------|---------|---------------|
+| **🐳 Local Docker** | `make dev` | [Docker Guide](./DOCKER.md) |
+| **☸️ AWS EKS** | Terraform + GitHub Actions | [Deployment Guide](../DEPLOYMENT_GUIDE.md) |
+| **🏗️ Infrastructure** | `terraform/` | [Terraform Guide](./terraform/README.md) |
+
+### 🏗️ Infrastructure Specifications
+- **Instance Type**: t3.medium
+- **Scaling**: Min: 2, Max: 10, Desired: 3
+- **Availability Zones**: 3 AZs
+- **Capacity**: ON_DEMAND instances
+- **Monthly Cost**: ~$270/month
+
+### 📖 Deployment Documentation
+- **[📋 Complete Deployment Guide](../DEPLOYMENT_GUIDE.md)** - Full setup instructions
+- **[⚡ Quick Start Guide](../DEPLOY_QUICK_START.md)** - 15-minute deployment
+- **[🐳 Docker Guide](./DOCKER.md)** - Local development setup
+- **[🏗️ Terraform Guide](./terraform/README.md)** - Infrastructure deployment
+
+**Ready for production deployment with identical infrastructure as the main kodey-backend app!** 🚀
 
 ## 📄 License
 

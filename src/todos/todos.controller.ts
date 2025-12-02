@@ -18,8 +18,8 @@ import {
 } from '@nestjs/swagger';
 import { TodosService } from './todos.service';
 import {
-  CreateTodoInput,
-  UpdateTodoInput,
+  type CreateTodoInput,
+  type UpdateTodoInput,
 } from '../common/entities/todo.entity';
 import { CacheInterceptor } from '../common/cache/interceptors/cache.interceptor';
 import { Cacheable, CacheInvalidate } from '../common/cache/decorators';

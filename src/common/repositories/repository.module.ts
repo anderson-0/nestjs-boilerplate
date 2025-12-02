@@ -13,12 +13,7 @@ export class RepositoryModule {
   static forRoot(): DynamicModule {
     return {
       module: RepositoryModule,
-      imports: [
-        ConfigModule,
-        PrismaModule,
-        DrizzleModule,
-        MongooseModule,
-      ],
+      imports: [ConfigModule, PrismaModule, DrizzleModule, MongooseModule],
       providers: [
         {
           provide: 'DATABASE_PROVIDER',
